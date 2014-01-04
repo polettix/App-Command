@@ -7,12 +7,14 @@ use warnings;
 use Carp;
 use English qw< -no_match_vars >;
 use Getopt::Long qw< GetOptionsFromArray >;
+use Scalar::Util qw< blessed >;
 
 use Moo;
 use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
 use YAML;
 use Try::Tiny;
 use App::Command::Exception;
+use Params::Validate ();
 
 has name => (
    is => 'ro',
@@ -24,6 +26,7 @@ has _supports => (
    is => 'ro',
    lazy => 1,
    builder => 'BUILD_supports',
+   init_arg => 'supports',
 );
 
 has parent => (
@@ -74,6 +77,16 @@ has help => (
    builder => 'BUILD_help',
 );
 
+has validator => (
+   is => 'ro',
+   lazy => 1,
+   builder => 'BUILD_validator',
+);
+
+sub BUILD_validator { return }
+
+sub BUILD_parameters { return [] }
+
 sub BUILD_getopt_config {
    my $self = shift;
    my @retval = 'gnu_getopt';
@@ -100,6 +113,12 @@ sub root_configuration {
    my $parent = $self->parent();
    return $parent->configuration() unless $parent->has_parent();
    return $parent->root_configuration();
+}
+
+sub root {
+   my $self = shift;
+   return $self unless $self->has_parent();
+   return $self->parent()->root();
 }
 
 sub name_prefix { return 'App' }
@@ -151,37 +170,58 @@ sub BUILD_args { return [ @ARGV ] }
 
 sub BUILD_children {
    my $self = shift;
-   return {
-      ready => [ $self->can('command_help'), $self->can('command_commands')],
-      expand => [ $self->can('autodiscover_children') ],
-   };
+   return [
+      $self->can('generate_help_command'),
+      $self->can('generate_commands_command'),
+      sub {
+         return unless $self->can('simple_commands');
+         return $self->generate_simple_commands($self->simple_commands());
+      },
+      $self->can('autodiscover_children'),
+   ];
    return 0;
 }
 
 sub children {
    my $self = shift;
-   my $children = $self->_children();
+   $self->_normalize_children();
+   return @{$self->_children()};
+}
 
-   # If set to false, no children for this command
-   return unless $children;
+sub _normalize_children {
+   my $self = shift;
+   my @children = map {
+      if (ref($_) eq 'CODE') {
+         $_->($self); # expand
+      }
+      elsif (ref($_) eq 'HASH') {
+         my ($class_name, $args) = %$_;
+         my $class = $self->load_class($class_name);
+         $class->new(%$args, parent => $self);
+      }
+      else { $_ } # leave unmodified
+   } @{$self->_children() || []};
+   $self->_set__children(\@children);
+}
 
-   # If already a reference to an array, use it
-   return @$children if ref($children) eq 'ARRAY';
+sub add_children {
+   my $self = shift;
+   return unless @_;
+   my @children = @{$self->_children() // []};
+   push @children, @_;
+   $self->_set__children(\@children);
+   return;
+}
 
-   if (ref($children) eq 'HASH') {
-      my @children = @{$children->{ready} // []};
-      push @children, map {
-         $_->($self);
-      } @{$children->{expand} // []};
-      $self->_set__children(\@children);
-      INFO "expanded children @children";
-      return @children;
-   }
-   
-   # Perform autodiscovery
-   $children = $self->autodiscover_children();
-   $self->_set__children($children);
-   return @$children;
+sub add_simple_children {
+   my $self = shift;
+   $self->add_children($self->generate_simple_commands(@_));
+}
+
+sub generate_simple_commands {
+   my $self = shift;
+   require App::Command::Simple;
+   return map { App::Command::Simple->new(%$_, parent => $self) } @_;
 }
 
 sub autodiscover_children {
@@ -277,7 +317,7 @@ sub configuration_from_files {
       ? $merged->{config} : @{$self->configuration_files()};
    FILE:
    for my $file (@files) {
-      INFO "checking file $file";
+      DEBUG "checking file $file";
       next FILE unless -r $file;
       my $data = YAML::LoadFile($file);
       return $data;
@@ -321,13 +361,32 @@ sub configuration_from_default {
    };
 }
 
+sub validate {
+   my $self = shift;
+   my $validator = $self->validator() or return;
+   my $configuration = $self->configuration();
+   Params::Validate::validation_options(on_fail => sub {
+      die App::Command::Exception->new(
+         status => 'validation failure',
+         message => shift,
+      );
+   });
+   my @parameters = %{$configuration->{merged}};
+   Params::Validate::validate(@parameters, $validator);
+}
+
 sub run {
    my $self = shift;
 
    # Force parsing of command line
+   DEBUG 'getting configuration (', $self->supports(), ')';
    my $configuration = $self->configuration();
 
+   # Validate configuration... if it makes sense
+   $self->validate();
+
    # Go
+   DEBUG 'calling execution (', $self->supports(), ')';
    return $self->execute(@_);
 }
 
@@ -340,70 +399,174 @@ sub load_class {
 
 sub dispatch {
    my $self = shift;
-   my $configuration = $self->configuration();
-   my ($subcommand, @args) = @{$configuration->{args}};
    my @children = $self->children()
       or LOGDIE 'no children in ' . $self->name() . "\n";
-   for my $child (@children) {
+
+   my $configuration = $self->configuration();
+   my ($subcommand, @args) = @{$configuration->{args}};
+   $subcommand //= 'help';
+
+   if (my $cmd = $self->resolve_subcommand($subcommand, @args)) {
       my $retval;
       try {
-         my @parameters = (
+         $retval = $cmd->run(
             command => $subcommand,
             args    => \@args,
             caller  => $self,
-         );
-         if (ref($child) eq 'ARRAY') {
-            $retval = $child->[0]->(
-               @parameters,
-               command_args => $child,
-            );
-         }
-         elsif (ref($child) eq 'CODE') {
-            $retval = $child->(@parameters);
-         }
-         else {
-            my $class = $self->load_class($child);
-            my $subcommand = $class->new(
-               parent => $self,
-               args => \@args,
-            );
-            die App::Command::Exception->new()
-               unless $subcommand->does_support($subcommand);
-            $retval = $subcommand->run(@parameters);
-         }
-         $retval //= 1;
+         ) // 1;
       }
       catch {
          my $e = $_;
          my $message;
-         if ($e->isa('App::Command::Exception')) {
+         if (blessed($e) && $e->isa('App::Command::Exception')) {
             $message = $e->message()
                if $e->status() ne 'unsupported';
+         }
+         elsif (ref $e) {
+            $message = YAML::Dump($e);
          }
          else {
             $message = $e;
          }
-         ERROR $message if defined $message;
+         LOGDIE $message if defined $message;
       };
       return $retval if defined $retval;
    }
-
-   LOGDIE "subcommand '$subcommand' is not implemented\n";
+   else {
+      LOGDIE "subcommand '$subcommand' is not implemented\n";
+   }
 }
 
 sub does_support {
-   my ($self, $command);
+   my ($self, $command) = @_;
    return grep { $_ eq $command } $self->supports();
 }
 
-sub command_help {
-   my %args = @_;
-   my $self = $args{caller};
-   return ('help on the command', 'help')
-      if $args{help};
-   die App::Command::Exception->new()
-      unless $args{command} eq 'help';
+sub add_help_command {
+   my $self = shift;
+   $self->add_simple_children($self->generate_help_command());
+}
 
+sub generate_help_command {
+   my $self = shift;
+   $self->generate_simple_commands({
+      help => 'help on the command',
+      supports => ['help'],
+      execute  => sub { $self->_command_help() },
+   });
+}
+
+sub resolve_subcommand {
+   my $self = shift;
+   my ($subcommand, @args) = @_;
+
+   CHILD:
+   for my $child ($self->children()) {
+      my $cmd = blessed($child) ? $child
+         : $self->load_class($child)->new(parent => $self, args => \@args);
+      return $cmd if $cmd->does_support($subcommand);
+   }
+
+   return;
+}
+
+sub _commandline_help {
+   my ($getopt) = @_;
+
+   my @retval;
+
+   my ($mode, $type, $desttype, $min, $max, $default);
+   if (substr($getopt, -1, 1) eq '!') {
+      $type = 'bool';
+      substr $getopt, -1, 1, '';
+      push @retval, 'boolean option';
+   }
+   elsif (substr($getopt, -1, 1) eq '+') {
+      $mode = 'increment';
+      substr $getopt, -1, 1, '';
+      push @retval, 'incremental option (adds 1 every time it is provided)';
+   }
+   elsif ($getopt =~ s<(
+         [:=])    # 1 mode
+         ([siof]) # 2 type
+         ([@%])?  # 3 desttype
+         (?:
+            \{
+               (\d*)? # 4 min
+               ,?
+               (\d*)? # 5 max
+            \}
+         )? \z><>mxs) {
+      $mode = $1 eq '=' ? 'mandatory' : 'optional';
+      $type = $2;
+      $desttype = $3;
+      $min = $4;
+      $max = $5;
+      if (defined $min) {
+         $mode = $min ? 'optional' : 'required';
+      }
+      $type = {
+         s => 'string',
+         i => 'integer',
+         o => 'perl-extended-integer',
+         f => 'float',
+      }->{$type};
+      my $line = "$mode $type option";
+      $line .= ", at least $min times" if defined($min) && $min > 1;
+      $line .= ", no more than $max times" if defined($max) && length($max);
+      $line .= ", list valued" if defined($desttype) && $desttype eq '@';
+      push @retval, $line;
+   }
+   elsif ($getopt =~ s<: (\d+) ([@%])? \z><>mxs) {
+      $mode = 'optional';
+      $type = 'i';
+      $default = $1;
+      $desttype = $2;
+      my $line = "optional integer, defaults to $default";
+      $line .= ", list valued" if defined($desttype) && $desttype eq '@';
+      push @retval, $line;
+   }
+   elsif ($getopt =~ s<:+ ([@%])? \z><>mxs) {
+      $mode = 'optional';
+      $type = 'i';
+      $default = 'increment';
+      $desttype = $1;
+      my $line = "optional integer, current value incremented if omitted";
+      $line .= ", list valued" if defined($desttype) && $desttype eq '@';
+      push @retval, $line;
+   }
+
+   my @alternatives = split /\|/, $getopt;
+   if ($type eq 'bool') {
+      push @retval, map {
+         if (length($_) eq 1) { "-$_" }
+         else { "--$_ | --no-$_" }
+      } @alternatives;
+   }
+   elsif ($mode eq 'optional') {
+      push @retval, map {
+         if (length($_) eq 1) { "-$_ [<value>]" }
+         else { "--$_ [<value>]" }
+      } @alternatives;
+   }
+   else {
+      push @retval, map {
+         if (length($_) eq 1) { "-$_ <value>" }
+         else { "--$_ <value>" }
+      } @alternatives;
+   }
+
+   return @retval;
+}
+
+sub _command_help {
+   my $self = shift;
+
+   my $target = $self;
+   my (undef, @args) = @{$self->configuration()->{args}};
+   $self = $self->resolve_subcommand(@args) if @args;
+
+   my %args = @_;
    print $self->help(), "\n\n";
 
    printf "Can be called as: %s\n\n", join ', ', $self->supports();
@@ -413,8 +576,12 @@ sub command_help {
       print "Parameters:\n";
       for my $parameter (@$parameters) {
          printf "%15s: %s\n", $parameter->{name}, $parameter->{help} // '';
-         printf "%15s  command-line: %s\n", '', $parameter->{getopt}
-            if exists $parameter->{environment};
+
+         if (exists $parameter->{getopt}) {
+            my @lines = _commandline_help($parameter->{getopt});
+            printf "%15s  command-line: %s\n", '', shift(@lines);
+            printf "%15s                %s\n", '', $_ for @lines;
+         }
          printf "%15s  environment : %s\n", '', $parameter->{environment}
             if exists $parameter->{environment};
          printf "%15s  default     : %s\n", '', $parameter->{default}
@@ -424,24 +591,28 @@ sub command_help {
    }
 
    if ($self->has_children()) {
-      print "Commands:\n";
-      command_commands(%args, command => 'commands');
+      print "Sub commands:\n";
+      $self->_command_commands();
    }
    return;
 }
 
-sub command_commands {
-   my %args = @_;
-   my $self = $args{caller};
+sub add_commands_command {
+   my $self = shift;
+   $self->add_simple_children($self->generate_commands_command());
+}
 
-   if ($args{help}) {
-      return ('list of supported subcommands', 'commands')
-         if $self->has_children();
-      return;
-   }
-   die App::Command::Exception->new()
-      unless ($args{command} eq 'commands') && $self->has_children();
+sub generate_commands_command {
+   my $self = shift;
+   $self->generate_simple_commands({
+      help => 'list of supported subcommands',
+      supports => ['commands'],
+      execute  => sub { $self->_command_commands() },
+   });
+}
 
+sub _command_commands {
+   my $self = shift;
    for my $child ($self->children()) {
       my ($help, @aliases);
       if (ref($child) eq 'CODE') {
@@ -455,11 +626,17 @@ sub command_commands {
          );
       }
       else {
-         my $class = $self->load_class($child);
-         my $object = $class->new(
-            parent => $self,
-            args => [],
-         );
+         my $object;
+         if (blessed $child) {
+            $object = $child;
+         }
+         else {
+            my $class = $self->load_class($child);
+            $object = $class->new(
+               parent => $self,
+               args => [],
+            );
+         }
          @aliases = $object->supports();
          $help = $object->help();
       }
