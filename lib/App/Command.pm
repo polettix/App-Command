@@ -66,7 +66,7 @@ has configuration_files => (
 );
 
 has args => (
-   is => 'ro',
+   is => 'rw',
    lazy => 1,
    builder => 'BUILD_args',
 );
@@ -90,7 +90,7 @@ sub BUILD_parameters { return [] }
 sub BUILD_getopt_config {
    my $self = shift;
    my @retval = 'gnu_getopt';
-   push @retval, 'pass_through'
+   push @retval, qw< require_order pass_through >
       if $self->has_children();
    return \@retval;
 }
@@ -328,6 +328,7 @@ sub configuration_from_files {
 sub configuration_from_args {
    my $self = shift;
 
+   DEBUG "setting Getopt::Long configuration @{$self->getopt_config()}";
    Getopt::Long::Configure('default', @{$self->getopt_config()});
 
    my @input = @{$self->args()};
@@ -335,8 +336,11 @@ sub configuration_from_args {
    my @specs = map { $_->{getopt} }
       grep { exists $_->{getopt} }
       @{$self->parameters() // []};
+   DEBUG "parsing command line with @specs";
    GetOptionsFromArray(\@input, \%output, @specs)
       or LOGDIE 'bailing out';
+
+   DEBUG "residual parameters: @input";
 
    return (\%output, \@input);
 }
@@ -377,6 +381,9 @@ sub validate {
 
 sub run {
    my $self = shift;
+   my %setup = @_;
+
+   $self->args($setup{args}) if exists $setup{args};
 
    # Force parsing of command line
    DEBUG 'getting configuration (', $self->supports(), ')';
@@ -405,6 +412,7 @@ sub dispatch {
    my $configuration = $self->configuration();
    my ($subcommand, @args) = @{$configuration->{args}};
    $subcommand //= 'help';
+   DEBUG "dispatching to $subcommand with arguments @args";
 
    if (my $cmd = $self->resolve_subcommand($subcommand, @args)) {
       my $retval;
