@@ -572,7 +572,11 @@ sub _command_help {
 
    my $target = $self;
    my (undef, @args) = @{$self->configuration()->{args}};
-   $self = $self->resolve_subcommand(@args) if @args;
+
+   if (@args) {
+      $self = $self->resolve_subcommand(@args)
+         or die "unknown subcommand '$args[0]'\n";
+   }
 
    my %args = @_;
    print $self->help(), "\n\n";
