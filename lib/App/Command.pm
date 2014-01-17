@@ -333,7 +333,12 @@ sub configuration_from_args {
 
    my @input = @{$self->args()};
    my %output;
-   my @specs = map { $_->{getopt} }
+   my @specs = map {
+         my $go = $_->{getopt};
+         ref($go) eq 'ARRAY'
+         ? ( $go->[0] => sub { $go->[1]->(\%output, @_) } )
+         : $go;
+      }
       grep { exists $_->{getopt} }
       @{$self->parameters() // []};
    DEBUG "parsing command line with @specs";
