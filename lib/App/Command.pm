@@ -485,6 +485,7 @@ sub resolve_subcommand {
 
 sub _commandline_help {
    my ($getopt) = @_;
+   $getopt = $getopt->[0] if ref($getopt) eq 'ARRAY';
 
    my @retval;
 
