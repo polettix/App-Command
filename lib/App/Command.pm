@@ -600,9 +600,9 @@ sub _command_help {
             printf "%15s  command-line: %s\n", '', shift(@lines);
             printf "%15s                %s\n", '', $_ for @lines;
          }
-         printf "%15s  environment : %s\n", '', $parameter->{environment}
+         printf "%15s  environment : %s\n", '', $parameter->{environment} // '*undef*'
             if exists $parameter->{environment};
-         printf "%15s  default     : %s\n", '', $parameter->{default}
+         printf "%15s  default     : %s\n", '', $parameter->{default} // '*undef*'
             if exists $parameter->{default};
       }
       print "\n";
