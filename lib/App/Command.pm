@@ -610,7 +610,7 @@ sub _command_help {
 
    if ($self->has_children()) {
       print "Sub commands:\n";
-      $self->_command_commands();
+      $self->_command_commands({alias => 1});
    }
    return;
 }
@@ -625,12 +625,20 @@ sub generate_commands_command {
    $self->generate_simple_commands({
       help => 'list of supported subcommands',
       supports => ['commands'],
-      execute  => sub { $self->_command_commands() },
+      execute  => sub { $self->_command_commands(shift->configuration()->{merged}) },
+      parameters => [
+         {
+            name => 'alias',
+            help => 'print all aliases for a command',
+            getopt => 'alias|aliases!',
+         },
+      ],
    });
 }
 
 sub _command_commands {
    my $self = shift;
+   my $c = shift // {};
    for my $child ($self->children()) {
       my ($help, @aliases);
       if (ref($child) eq 'CODE') {
@@ -660,6 +668,7 @@ sub _command_commands {
       }
       next unless @aliases;
       printf {*STDOUT} "%15s: %s\n", shift(@aliases), $help;
+      next unless $c->{alias};
       printf {*STDOUT} "%15s  (also as: %s)\n", '', join ', ', @aliases
          if @aliases;
    }
