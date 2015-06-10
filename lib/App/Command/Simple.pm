@@ -1,5 +1,7 @@
 package App::Command::Simple;
 
+# ABSTRACT: class for executing 'simple' commands
+
 use strict;
 use warnings;
 use Carp;
