@@ -237,7 +237,7 @@ sub autodiscover_children {
          push @children, map {
                (my $child = $_) =~ s/\.pm//mxs;
                $mypack . '::' . $child;
-            } 
+            }
             grep {
                my $fullpath = $path . '/' . $_;
                -f $fullpath && -r $fullpath && $fullpath =~ m{\.pm$}mxs;
