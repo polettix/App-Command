@@ -162,38 +162,38 @@ sub run {
 
 1;
 __END__
-
-=method BUILD_children
-
-override to set the children. Can be:
-
-=over
-
-=item a reference to an array
-
-that will contain the names of the packages that implement the children
-commands
-
-=item a true value
-
-that is not a reference to an array, in which case autodiscovery of
-children commands will be triggered (see L</autodiscover_children> for
-a default implementation that is overrideable)
-
-=item a false value
-
-to mark a leaf command
-
-=back
-
-By default commands are considered leaves, i.e. you have to override this
-method (e.g. by returning a I<simple> true value) to look for children
-commands.
-
-=method children
-
-Get the list 
-
-=method autodiscover_children
-
-override to change how to autodiscover children commands
+# 
+# =method BUILD_children
+# 
+# override to set the children. Can be:
+# 
+# =over
+# 
+# =item a reference to an array
+# 
+# that will contain the names of the packages that implement the children
+# commands
+# 
+# =item a true value
+# 
+# that is not a reference to an array, in which case autodiscovery of
+# children commands will be triggered (see L</autodiscover_children> for
+# a default implementation that is overrideable)
+# 
+# =item a false value
+# 
+# to mark a leaf command
+# 
+# =back
+# 
+# By default commands are considered leaves, i.e. you have to override this
+# method (e.g. by returning a I<simple> true value) to look for children
+# commands.
+# 
+# =method children
+# 
+# Get the list 
+# 
+# =method autodiscover_children
+# 
+# override to change how to autodiscover children commands
