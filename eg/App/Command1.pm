@@ -5,11 +5,12 @@ use warnings;
 use Carp;
 use English qw< -no_match_vars >;
 use Data::Dumper; $Data::Dumper::Indent = 1;
-use YAML;
 use Log::Log4perl::Tiny qw< :easy >;
 
 use lib 'lib';
 use lib '../lib';
+
+use Sub::Identify;
 
 use Moo;
 extends 'App::Command';
@@ -36,24 +37,35 @@ sub BUILD_help {
    return 'some help text';
 }
 
+sub BUILD_description {
+   return <<'END_OF_DESCRIPTION';
+This is a description for the top-level command.
+
+Yes it is.
+
+And here it is.
+END_OF_DESCRIPTION
+}
+
 sub BUILD_configuration_files {
    my $self = shift;
    return [ $self->default_filenames() ];
 }
 
-sub configuration_from_other {
-   my $self = shift;
-   return $self->configuration_from_files(@_);
-}
+sub BUILD_default_command { return 'show-foo' }
 
-sub execute {
+sub simple_commands {
    my $self = shift;
-   my $configuration = $self->configuration;
-   INFO Dump($configuration);
-   return $self->dispatch();
+   return (
+      {
+         supports => ['show-foo', 'show_foo'],
+         help => 'show the value of the foo option',
+         description => 'Well, show that value!',
+         execute  => sub {
+            INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+         },
+      }
+   );
 }
-
 
 1;
-__END__
-
