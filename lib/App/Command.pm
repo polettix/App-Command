@@ -1,8 +1,7 @@
 package App::Command;
 
-# ABSTRACT: simplify command line applications generation
-
 use strict;
+{ our $VERSION = '0.001' }
 use Moo;
 use Scalar::Util qw< blessed >;
 use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
@@ -146,6 +145,8 @@ sub resolve_subcommand {
 
 sub run {
    my ($self, %args) = @_;
+
+   $self = $self->new unless ref $self; # self-instantiate
 
    $self->input_args($args{args}) if exists $args{args};
 
