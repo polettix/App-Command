@@ -1,0 +1,106 @@
+{
+   "abstract" : "simplify command line applications generation",
+   "author" : [
+      "Flavio Poletti (flavio@polettix.it)"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Dist::Milla version v1.0.20, Dist::Zilla version 6.012, CPAN::Meta::Converter version 2.150005",
+   "license" : [
+      "apache_2_0"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : 2
+   },
+   "name" : "App-Command",
+   "no_index" : {
+      "directory" : [
+         "eg",
+         "examples",
+         "inc",
+         "share",
+         "t",
+         "xt"
+      ]
+   },
+   "prereqs" : {
+      "configure" : {
+         "requires" : {
+            "Module::Build::Tiny" : "0.034"
+         }
+      },
+      "develop" : {
+         "requires" : {
+            "Dist::Milla" : "v1.0.20",
+            "Path::Tiny" : "0.084",
+            "Template::Perlish" : "1.52",
+            "Test::Pod" : "1.51",
+            "Test::Pod::Coverage" : "1.04"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "Log::Log4perl::Tiny" : "0",
+            "Moo" : "0",
+            "Params::Validate" : "0",
+            "Try::Catch" : "0",
+            "namespace::autoclean" : "0"
+         }
+      }
+   },
+   "provides" : {
+      "App::Command" : {
+         "file" : "lib/App/Command.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Configuration" : {
+         "file" : "lib/App/Command/Configuration.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Configuration::CmdLine" : {
+         "file" : "lib/App/Command/Configuration/CmdLine.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Configuration::Default" : {
+         "file" : "lib/App/Command/Configuration/Default.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Configuration::Environment" : {
+         "file" : "lib/App/Command/Configuration/Environment.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Exception" : {
+         "file" : "lib/App/Command/Exception.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Role::Configuration" : {
+         "file" : "lib/App/Command/Role/Configuration.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Role::Help" : {
+         "file" : "lib/App/Command/Role/Help.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Role::Hierarchy" : {
+         "file" : "lib/App/Command/Role/Hierarchy.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Role::Name" : {
+         "file" : "lib/App/Command/Role/Name.pm",
+         "version" : "0.001"
+      },
+      "App::Command::Simple" : {
+         "file" : "lib/App/Command/Simple.pm",
+         "version" : "0.001"
+      }
+   },
+   "release_status" : "stable",
+   "version" : "0.001",
+   "x_contributors" : [
+      "Flavio Poletti <flavio@polettix.it>"
+   ],
+   "x_generated_by_perl" : "v5.24.1",
+   "x_serialization_backend" : "Cpanel::JSON::XS version 4.04",
+   "x_static_install" : 1
+}
+
