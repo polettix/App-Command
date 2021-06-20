@@ -3,11 +3,8 @@ package App::Command::Exception;
 # ABSTRACT: exception class for App::Command
 
 use strict;
-use warnings;
-use Carp;
-use English qw( -no_match_vars );
-
 use Moo;
+use namespace::autoclean;
 
 has status => (
    is => 'ro',

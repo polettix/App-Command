@@ -3,12 +3,10 @@ package App::Command::Simple;
 # ABSTRACT: class for executing 'simple' commands
 
 use strict;
-use warnings;
-use Carp;
-use English qw< -no_match_vars >;
-use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
-
 use Moo;
+use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+use namespace::autoclean;
+
 extends 'App::Command';
 
 has execute_sub => (
@@ -25,5 +23,3 @@ sub execute {
 }
 
 1;
-__END__
-
