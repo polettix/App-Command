@@ -54,6 +54,8 @@ sub BUILD_configuration_files {
 
 sub BUILD_default_command { return 'show-foo' }
 
+sub BUILD_sources { return [qw< +CmdLine +Environment +JSON +Default >] }
+
 sub simple_commands {
    my $self = shift;
    return (
