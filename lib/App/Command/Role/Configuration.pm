@@ -5,7 +5,7 @@ use Moo::Role;
 use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
 use namespace::autoclean;
 
-requires qw< has_children has_parent parent >;
+requires qw< fqdn has_children has_parent parent >;
 
 has _configuration => (
    is => 'ro',
@@ -61,9 +61,11 @@ sub BUILD_configuration {
    (my $path = $class . '.pm') =~ s{::}{/}gmxs;
    require $path;
    return $class->create(
+      fqdn         => $self->fqdn,
       has_children => $self->has_children,
       input_args   => $self->input_args,
       parameters   => $self->parameters,
+      parent       => ($self->has_parent ? $self->parent : undef),
       sources      => $self->sources,
       source_setup_for => $self->source_setup_for,
       validator    => $self->validator,
@@ -85,7 +87,7 @@ sub complete_configuration {
 sub c { return shift->configuration(@_) }
 
 sub configuration {
-   my ($self, $name) = @_;
+   my ($self, $name, $default) = @_;
    my $node = $self;
    while (defined $node) {
       my ($exists, $value) = $node->_configuration->check_and_get($name);
@@ -93,7 +95,8 @@ sub configuration {
       last unless $node->has_parent;
       $node = $node->parent;
    }
-   LOGDIE "could not find value for configuration '$name'"
+   return $default->() if ref($default) eq 'CODE';
+   return $default;
 }
 
 sub configurations {

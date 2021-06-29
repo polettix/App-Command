@@ -15,6 +15,13 @@ has execute_sub => (
    init_arg => 'execute',
 );
 
+sub BUILD_name {
+   my $self = shift;
+   my ($main) = $self->supports;
+   return $main unless $self->has_parent;
+   return $self->parent->name . '~' . $main;
+}
+
 sub BUILD_children { return [] }
 
 sub execute {

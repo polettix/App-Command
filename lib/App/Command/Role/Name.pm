@@ -4,6 +4,12 @@ use strict;
 use Moo::Role;
 use namespace::autoclean;
 
+has fqdn => (
+   is => 'ro',
+   lazy => 1,
+   builder => 'BUILD_fqdn',
+);
+
 has name => (
    is => 'ro',
    lazy => 1,
@@ -16,6 +22,15 @@ has _supports => (
    builder => 'BUILD_supports',
    init_arg => 'supports',
 );
+
+sub BUILD_fqdn {
+   my $self = shift;
+   my @path = $self->name;
+   warn "I am @path\n";
+   unshift @path, $self->parent->fqdn
+      if $self->can('parent') && $self->has_parent;
+   return join '.', @path;
+}
 
 sub BUILD_name {
    my $self = shift;

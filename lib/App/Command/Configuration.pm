@@ -29,12 +29,19 @@ sub create {
    my @residual_args;
 
    for my $source (@{$args{sources}}) {
-      my $srcpack = $source;
-      $srcpack = $package . '::' . $1 if $source =~ m{\A \+ (.*)}mxs;
-      (my $path = $srcpack . '.pm') =~ s{::}{/}gmxs;
-      require $path;
+      my $getter;
+      if (ref($source) eq 'ARRAY') {
+         ($source, $getter) = @$source;
+      }
+      else {
+         my $srcpack = $source;
+         $srcpack = $package . '::' . $1 if $source =~ m{\A \+ (.*)}mxs;
+         (my $path = $srcpack . '.pm') =~ s{::}{/}gmxs;
+         require $path;
+         $getter = $srcpack->can('get');
+      }
 
-      my ($opts, $residual_args) = $srcpack->can('get')->(
+      my ($opts, $residual_args) = $getter->(
          %{$ssf->{$source} // {}},
          %args,
          configuration => $configuration->{merged},

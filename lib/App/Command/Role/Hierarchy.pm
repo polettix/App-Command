@@ -9,8 +9,6 @@ requires qw< load_class >;
 
 has parent => (
    is => 'ro',
-   lazy => 1,
-   predicate => 'has_parent',
    weak_ref => 1,
 );
 
@@ -77,5 +75,7 @@ sub children {
 }
 
 sub has_children { return scalar(shift->children) }
+
+sub has_parent { return defined(shift->{parent}) }
 
 1;
