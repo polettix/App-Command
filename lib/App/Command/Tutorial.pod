@@ -46,9 +46,9 @@ The following example shows a reasonably tight bare minimum:
          {
             name => 'foo',
             help => 'foo for bar',
-            getopt => 'foo|f!',
+            getopt => 'foo|f!',           # Getopt::Long FTW
             environment => 'GALOOK_FOO',
-            default => 1, # --no-foo
+            default => 1,                 # --no-foo to negate
          },
       ];
    }
@@ -66,11 +66,11 @@ add...
 
 =over
 
-* ... C<execute>
+=item * ... C<execute>
 
 to make the program do something;
 
-* ... C<BUILD_parameters>
+=item * ... C<BUILD_parameters>
 
 to provide the specifications for the parameters that you can accept.
 
