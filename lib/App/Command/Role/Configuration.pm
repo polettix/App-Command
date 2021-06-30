@@ -87,21 +87,21 @@ sub complete_configuration {
 sub c { return shift->configuration(@_) }
 
 sub configuration {
-   my ($self, $name, $default) = @_;
+   my ($self, $name, %opts) = @_;
+
+   my $climb = exists $args{parent} ? $args{parent} : 1;
+
    my $node = $self;
    while (defined $node) {
       my ($exists, $value) = $node->_configuration->check_and_get($name);
       return $value if $exists;
-      last unless $node->has_parent;
+      last unless $climb && $node->has_parent;
       $node = $node->parent;
    }
-   return $default->() if ref($default) eq 'CODE';
-   return $default;
-}
 
-sub configurations {
-   my $self = shift;
-   map { $_ => $self->configuration($_) } @_;
+   my $default = $args{default};
+   return $default->(@_) if ref($default) eq 'CODE';
+   return $default;
 }
 
 1;
