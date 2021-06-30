@@ -11,4 +11,4 @@ use Log::Log4perl::Tiny qw< :easy LOGLEVEL :no_extra_logdie_message >;
 
 use App::Command1;
 
-App::Command1->new()->run(args => \@ARGV);
+App::Command1->run(args => \@ARGV);
