@@ -113,6 +113,14 @@ sub _commandline_help {
    return @retval;
 }
 
+sub __name_for_parameter {
+   my $p = shift;
+   return $p->{name} if defined $p->{name};
+   return $1 if defined $p->{getopt} && $p->{getopt} =~ m{\A(\w+)}mxs;
+   return lc $p->{environment} if defined $p->{environment};
+   return '~~~';
+}
+
 sub print_help {
    my $self = shift;
    my $fh = \*STDOUT;
@@ -139,7 +147,7 @@ sub print_help {
    if (@$parameters) {
       print {$fh} "Options:\n";
       for my $parameter (@$parameters) {
-         printf {$fh} "%15s: %s\n", $parameter->{name}, $parameter->{help} // '';
+         printf {$fh} "%15s: %s\n", __name_for_parameter($parameter), $parameter->{help} // '';
 
          if (exists $parameter->{getopt}) {
             my @lines = _commandline_help($parameter->{getopt});
@@ -199,7 +207,6 @@ sub print_commands {
       printf {$fh} "%15s  (also as: %s)\n", '', join ', ', @aliases
          if @aliases;
    }
-   
    return;
 }
 
