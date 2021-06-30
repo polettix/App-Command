@@ -4,10 +4,10 @@ use strict;
 use Moo::Role;
 use namespace::autoclean;
 
-has fqdn => (
+has fqn => (
    is => 'ro',
    lazy => 1,
-   builder => 'BUILD_fqdn',
+   builder => 'BUILD_fqn',
 );
 
 has name => (
@@ -23,10 +23,10 @@ has _supports => (
    init_arg => 'supports',
 );
 
-sub BUILD_fqdn {
+sub BUILD_fqn {
    my $self = shift;
    my @path = $self->name;
-   unshift @path, $self->parent->fqdn
+   unshift @path, $self->parent->fqn
       if $self->can('parent') && $self->has_parent;
    return join '.', @path;
 }

@@ -5,7 +5,7 @@ use Moo::Role;
 use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
 use namespace::autoclean;
 
-requires qw< fqdn has_children has_parent parent >;
+requires qw< fqn has_children has_parent parent >;
 
 has _configuration => (
    is => 'ro',
@@ -61,7 +61,7 @@ sub BUILD_configuration {
    (my $path = $class . '.pm') =~ s{::}{/}gmxs;
    require $path;
    return $class->create(
-      fqdn         => $self->fqdn,
+      fqn          => $self->fqn,
       has_children => $self->has_children,
       input_args   => $self->input_args,
       parameters   => $self->parameters,

@@ -3,10 +3,10 @@ use strict;
 
 sub get {
    my %args = @_;
-   my ($fqdn, $parent) = @args{qw< fqdn parent >};
+   my ($fqn, $parent) = @args{qw< fqn parent >};
    my $conf;
    while ($parent && !$conf) {
-      $conf = $parent->setup_for($fqdn) if $parent->can('setup_for');
+      $conf = $parent->setup_for($fqn) if $parent->can('setup_for');
       $parent = $parent->has_parent ? $parent->parent : undef;
    } ## end while ($parent && !$conf)
    return {} unless $conf;
