@@ -1,0 +1,3 @@
+To execute the examples, use this form:
+
+    STAGE=tutXX ./galook ...

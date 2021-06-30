@@ -1,0 +1,6 @@
+#!/usr/bin/env perl
+use Log::Log4perl::Tiny qw< LOGLEVEL >;
+use lib $ENV{STAGE};
+use Galook;
+LOGLEVEL $ENV{LOGLEVEL} || 'INFO';
+Galook->run(args => [@ARGV]);

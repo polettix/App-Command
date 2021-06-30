@@ -1,0 +1,711 @@
+=pod
+
+=encoding utf8
+
+=head1 NAME
+
+App::Command::Tutorial - use App::Command
+
+=head1 INTRODUCTION
+
+This tutorial aims at showing you the main capabilities of
+C<App::Command> to make using it easy and effective.
+
+C<App::Command> assumes that you will code your application as packages,
+derived from C<App::Command> using L<Moo>.
+
+For this reason, in the following examples we will assume that the
+I<application> C<galook> will be implemented by using package C<Galook>
+as the main entry point.
+
+Assuming you want to enable logging via L<Log::Log4perl::Tiny>, the
+calling program will be as simple as this:
+
+   #!/usr/bin/env perl
+   use Log::Log4perl::Tiny;
+   use Galook;
+   Galook->run(args => [@ARGV]);
+
+=head1 WARM-UP: SINGLE-COMMAND APPLICATION
+
+Using C<App::Command> for single commands might be somehow I<overkill>,
+although you get a lot of benefits out of the box, including the
+possibility to easily move to a hierarchical command structure.
+
+=head2 A Reasonable Bare Minimum
+
+The following example shows a reasonably tight bare minimum:
+
+   package Galook;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_parameters {
+      return [
+         {
+            name => 'foo',
+            help => 'foo for bar',
+            getopt => 'foo|f!',
+            environment => 'GALOOK_FOO',
+            default => 1, # --no-foo
+         },
+      ];
+   }
+
+   sub execute {
+      my $self = shift;
+      INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+   }
+
+   1;
+
+Actually, for the I<bare> minimum you only need to I<extend>
+C<App::Commmand>. It will not do much though, so you probably want to
+add...
+
+=over
+
+* ... C<execute>
+
+to make the program do something;
+
+* ... C<BUILD_parameters>
+
+to provide the specifications for the parameters that you can accept.
+
+=back
+
+The C<BUILD_parameters> is supposed to return a reference to an array of
+hashes, each describing a parameter that is possible to gather from the
+command line, from the environment, or from a default value.
+
+In our example, we only accept one single boolean parameter, that can be
+provided as either C<-f> (sets the parameter to a true value), C<--foo>
+(same as C<-f>), or C<--no-foo> (resets the parameter to a false value)
+when passed on the command line. It can also be initialized by
+environment variable C<COMMAND1_FOO> if no command-line option is
+available, as well as take the default value C<1> (i.e. true) in lack of
+either of the other two alternatives.
+
+The execution is pretty simple: based on the specific value of the
+parameter, it prints its boolean status:
+
+   # default value applies
+   $ ./galook
+   [2021/06/30 01:36:54] [ INFO] foo is true
+
+   # command-line option wins
+   $ ./galook --no-foo
+   [2021/06/30 01:37:02] [ INFO] foo is false
+
+   # environment variable wins
+   $ GALOOK_FOO=0 ./galook
+   [2021/06/30 01:37:27] [ INFO] foo is false
+
+   # command-line options wins over environment variable
+   $ GALOOK_FOO=0 ./galook --foo
+   [2021/06/30 01:37:32] [ INFO] foo is true
+
+=head2 Adding parameters configuration from a JSON file
+
+So far we have an application with the automation of parameters
+handling, with support for various sources (command line, environment
+variables and defaults).
+
+It's easy to add a configuration file to the mix too, making it possible
+to get it from the command line:
+
+   package Galook;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_parameters {
+      return [
+         {
+            name => 'config',
+            help => 'path to the configuration file',
+            getopt => 'config|c=s',
+            environment => 'GALOOK_CONFIG',
+            default => undef,
+         },
+         {
+            name => 'foo',
+            help => 'foo for bar',
+            getopt => 'foo|f!',
+            environment => 'GALOOK_FOO',
+            default => 1, # --no-foo
+         },
+      ];
+   }
+
+   sub BUILD_sources { return [qw< +CmdLine +Environment +JSON +Default >] }
+
+   sub execute {
+      my $self = shift;
+      INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+   }
+
+   1;
+
+We added a parameter to accept the configuration file path (either from
+command line or from the environment, without a defined default though)
+and we added loading the file in the sequence of sources that are
+attempted for getting parameters' values. Note that they are listed in
+order of precedence: values coming from the command line take the
+precedence of the environment, then we have the JSON configuration, and
+last come the default values.
+
+This gives us the following:
+
+   # default value applies
+   $ ./galook
+   [2021/06/30 01:43:05] [ INFO] foo is true
+
+   # this is our example configuration file
+   $ cat tut02/galook.json
+   {"foo":false}
+
+   # foo's value is taken from the configuration file now
+   $ ./galook -c tut02/galook.json
+   [2021/06/30 01:43:15] [ INFO] foo is false
+
+=head1 OUR FIRST SUBCOMMAND(S): GETTING HELP, AUTOMATICALLY
+
+C<App::Command> generates some help automatically, making it available
+as a I<sub-command> C<help>. As we did the overriding of the C<execute>
+method, though, this command is not I<accessible> in our examples so
+far.
+
+Additional sub-commands, and their parameters, are accessible via the
+C<args> method. We can check if there is anything available there, and
+in case call C<dispatch> to the sub-command; otherwise, we keep our
+implementation:
+
+   package Galook;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_parameters {
+      return [
+         {
+            name        => 'config',
+            help        => 'path to the configuration file',
+            getopt      => 'config|c=s',
+            environment => 'GALOOK_CONFIG',
+            default     => undef,
+         },
+         {
+            name        => 'foo',
+            help        => 'foo for bar',
+            getopt      => 'foo|f!',
+            environment => 'GALOOK_FOO',
+            default     => 1,               # --no-foo
+         },
+      ];
+   } ## end sub BUILD_parameters
+
+   sub BUILD_sources { return [qw< +CmdLine +Environment +JSON +Default >] }
+
+   sub execute {
+      my $self = shift;
+      return $self->dispatch if $self->args;
+      INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+   }
+
+   1;
+
+As we can see, it's only a simple addiiton in C<execute> to hand control
+over to C<dispatch> in case there are additional unparsed command-line
+arguments.
+
+This allows us to call the command like before:
+
+   $ ./galook
+   [2021/06/30 01:57:39] [ INFO] foo is true
+
+as well as calling the C<help> sub-command:
+
+   $ ./galook help
+   Welp! Welp! There is no help!
+
+   Can be called as: galook
+
+   Options:
+            config: path to the configuration file
+                    command-line: mandatory string option
+                                  --config <value>
+                                  -c <value>
+                    environment : GALOOK_CONFIG
+                    default     : *undef*
+               foo: foo for bar
+                    command-line: boolean option
+                                  --foo | --no-foo
+                                  -f
+                    environment : GALOOK_FOO
+                    default     : 1
+
+   Sub commands:
+             help: help on the command
+         commands: list of supported subcommand
+
+The printout gives us as much information as it can, e.g. regarding the
+different options that are accepted; it also makes it clear that I<some
+help> should be set but isn't. It's easy to add both a synthetic I<help>
+via C<BUILD_help> and a more verbose I<description> via
+C<BUILD_description>:
+
+   package Galook;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_help { 'galook your foos' }
+
+   sub BUILD_description {
+      return <<'END';
+   This is some description.
+
+   On multiple lines, I mean.
+
+   Here it ends the description.
+   END
+   }
+
+   sub BUILD_parameters {
+      return [
+         {
+            name        => 'config',
+            help        => 'path to the configuration file',
+            getopt      => 'config|c=s',
+            environment => 'GALOOK_CONFIG',
+            default     => undef,
+         },
+         {
+            name        => 'foo',
+            help        => 'foo for bar',
+            getopt      => 'foo|f!',
+            environment => 'GALOOK_FOO',
+            default     => 1,               # --no-foo
+         },
+      ];
+   } ## end sub BUILD_parameters
+
+   sub BUILD_sources { return [qw< +CmdLine +Environment +JSON +Default >] }
+
+   sub execute {
+      my $self = shift;
+      return $self->dispatch if $self->args;
+      INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+   }
+
+   1;
+
+Now the C<help> sub-command is gentler:
+
+   $ ./galook help
+   galook your foos
+
+   Description:
+      This is some description.
+
+      On multiple lines, I mean.
+
+      Here it ends the description.
+
+   Can be called as: galook
+
+   Options:
+            config: path to the configuration file
+                    command-line: mandatory string option
+                                  --config <value>
+                                  -c <value>
+                    environment : GALOOK_CONFIG
+                    default     : *undef*
+               foo: foo for bar
+                    command-line: boolean option
+                                  --foo | --no-foo
+                                  -f
+                    environment : GALOOK_FOO
+                    default     : 1
+
+   Sub commands:
+             help: help on the command
+         commands: list of supported subcommands
+
+The astute reader surely noticed the C<commands> sub-command is
+available too:
+
+   $ ./galook commands
+           help: help on the command
+       commands: list of supported subcommands
+
+It is a subset of the C<help> command that only prints the list of
+sub-commands.
+
+=head1 ADDING SIMPLE SUB-COMMANDS
+
+We can start adding sub-commands at this point. In case they are
+I<simple>, there's an equally I<simple> interface to do this.
+
+=head2 A Simple Sub-Command
+
+Suppose we want to add a sub-command C<date>, to print out the current
+date and time in the current locale or, if a boolean (sub-)parameter
+C<--gm> is passed, in Greenwich Time.
+
+We can implement C<simple_commands> and let C<App::Command> do the rest:
+
+   package Galook;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_help { 'galook your foos' }
+
+   sub BUILD_description {
+      return <<'END';
+   This is some description.
+
+   On multiple lines, I mean.
+
+   Here it ends the description.
+   END
+   }
+
+   sub BUILD_parameters {
+      return [
+         {
+            name        => 'config',
+            help        => 'path to the configuration file',
+            getopt      => 'config|c=s',
+            environment => 'GALOOK_CONFIG',
+            default     => undef,
+         },
+         {
+            name        => 'foo',
+            help        => 'foo for bar',
+            getopt      => 'foo|f!',
+            environment => 'GALOOK_FOO',
+            default     => 1,               # --no-foo
+         },
+      ];
+   } ## end sub BUILD_parameters
+
+   sub BUILD_sources { return [qw< +CmdLine +Environment +JSON +Default >] }
+
+   sub simple_commands {
+      return (
+         {
+            supports => [qw< date now >],
+            help => 'show the current date and time',
+            description => 'Print date and time for... now',
+            parameters => [
+               {
+                  name => 'gm',
+                  help => 'use GMT instead of local',
+                  getopt => 'gm!',
+                  environment => 'GALOOK_DATE_GM',
+                  default => 0,
+               },
+            ],
+            execute  => sub {
+               my $self = shift;
+               my $now = $self->c('gm') ? gmtime() : localtime();
+               print {*STDOUT} $now, "\n";
+            },
+         }
+      );
+   }
+
+   sub execute {
+      my $self = shift;
+      return $self->dispatch if $self->args;
+      INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+   }
+
+   1;
+
+This is how it goes:
+
+   $ ./galook now
+   Wed Jun 30 02:20:35 2021
+
+   $ ./galook now --gm
+   Wed Jun 30 00:20:38 2021
+
+   $ ./galook commands
+           help: help on the command
+       commands: list of supported subcommands
+           date: show the current date and time
+                 (also as: now)
+
+This also shows that it's possible to set I<aliases> to the commands, by
+setting multiple strings in the C<supports> configuration for the simple
+application. This is also shown in the help command that is
+automatically generated.
+
+=head2 Restructuring
+
+The current application layout is a bit inconsistent at this point,
+because the root command can be used directly or call a sub-command.
+It's probably better to keep it as an I<entry point> and have real
+action be performed by sub-commands only.
+
+So, we will first move the code to show the value for parameter C<foo>
+into another I<simple command>, and get rid of C<execute> completely:
+
+   package Galook;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_help { 'galook your foos' }
+
+   sub BUILD_description {
+      return <<'END';
+   This is some description.
+
+   On multiple lines, I mean.
+
+   Here it ends the description.
+   END
+   }
+
+   sub BUILD_parameters {
+      return [
+         {
+            name        => 'config',
+            help        => 'path to the configuration file',
+            getopt      => 'config|c=s',
+            environment => 'GALOOK_CONFIG',
+            default     => undef,
+         },
+         {
+            name        => 'foo',
+            help        => 'foo for bar',
+            getopt      => 'foo|f!',
+            environment => 'GALOOK_FOO',
+            default     => 1,               # --no-foo
+         },
+      ];
+   } ## end sub BUILD_parameters
+
+   sub BUILD_sources { return [qw< +CmdLine +Environment +JSON +Default >] }
+
+   sub simple_commands {
+      return (
+         {
+            supports => [qw< date now >],
+            help => 'show the current date and time',
+            description => 'Print date and time for... now',
+            parameters => [
+               {
+                  name => 'gm',
+                  help => 'use GMT instead of local',
+                  getopt => 'gm!',
+                  environment => 'GALOOK_DATE_GM',
+                  default => 0,
+               },
+            ],
+            execute  => sub {
+               my $self = shift;
+               my $now = $self->c('gm') ? gmtime() : localtime();
+               print {*STDOUT} $now, "\n";
+            },
+         },
+         {
+            supports => [qw< show-foo >],
+            help => 'show the current value for parameter foo',
+            description => 'foo can be true or false... show it!',
+            execute => sub {
+               my $self = shift;
+               INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+            },
+         },
+      );
+   }
+
+   1;
+
+This leads us here:
+
+   $ ./galook commands
+           help: help on the command
+       commands: list of supported subcommands
+           date: show the current date and time
+                 (also as: now)
+       show-foo: show the current value for parameter fo
+
+   $ ./galook show-foo
+   [2021/06/30 02:31:01] [ INFO] foo is true
+
+Getting rid of C<execute> is a good thing, especially if we are
+interested into sub-commands. In our previous implementation we had to
+call C<dispatch> explicitly, but as we can see this can be left to
+C<App::Command> to figure out.
+
+On the other hand, this now I<forces> us to specify the C<show-foo>
+sub-command, otherwise we get the help message by default:
+
+   $ ./galook
+   galook your foos
+
+   Description:
+       This is some description.
+
+       On multiple lines, I mean.
+
+       Here it ends the description.
+
+   Can be called as: galook
+
+   Options:
+            config: path to the configuration file
+                    command-line: mandatory string option
+                                  --config <value>
+                                  -c <value>
+                    environment : GALOOK_CONFIG
+                    default     : *undef*
+               foo: foo for bar
+                    command-line: boolean option
+                                  --foo | --no-foo
+                                  -f
+                    environment : GALOOK_FOO
+                    default     : 1
+
+   Sub commands:
+              help: help on the command
+          commands: list of supported subcommands
+              date: show the current date and time
+                    (also as: now)
+          show-foo: show the current value for parameter foo
+
+This can be easily addressed (if we want!) by overriding the
+C<BUILD_default_command> method:
+
+   package Galook;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_help { 'galook your foos' }
+
+   sub BUILD_description {
+      return <<'END';
+   This is some description.
+
+   On multiple lines, I mean.
+
+   Here it ends the description.
+   END
+   }
+
+   sub BUILD_parameters {
+      return [
+         {
+            name        => 'config',
+            help        => 'path to the configuration file',
+            getopt      => 'config|c=s',
+            environment => 'GALOOK_CONFIG',
+            default     => undef,
+         },
+         {
+            name        => 'foo',
+            help        => 'foo for bar',
+            getopt      => 'foo|f!',
+            environment => 'GALOOK_FOO',
+            default     => 1,               # --no-foo
+         },
+      ];
+   } ## end sub BUILD_parameters
+
+   sub BUILD_sources { return [qw< +CmdLine +Environment +JSON +Default >] }
+
+   sub simple_commands {
+      return (
+         {
+            supports => [qw< date now >],
+            help => 'show the current date and time',
+            description => 'Print date and time for... now',
+            parameters => [
+               {
+                  name => 'gm',
+                  help => 'use GMT instead of local',
+                  getopt => 'gm!',
+                  environment => 'GALOOK_DATE_GM',
+                  default => 0,
+               },
+            ],
+            execute  => sub {
+               my $self = shift;
+               my $now = $self->c('gm') ? gmtime() : localtime();
+               print {*STDOUT} $now, "\n";
+            },
+         },
+         {
+            supports => [qw< show-foo >],
+            help => 'show the current value for parameter foo',
+            description => 'foo can be true or false... show it!',
+            execute => sub {
+               my $self = shift;
+               INFO "foo is ", $self->configuration('foo') ? 'true' : 'false';
+            },
+         },
+      );
+   }
+
+   sub BUILD_default_command { 'show-foo' }
+
+   1;
+
+Now we have:
+
+   $ ./galook
+   [2021/06/30 02:36:56] [ INFO] foo is true
+
+as expected.
+
+=head1 ADDING FULL SUB-COMMANDS
+
+Simple sub-commands should address all our needs for I<leaf> commands
+(i.e. those that actually I<do> stuff), but fall short if we need to
+have a multi-layered hierarchy of commands.
+
+For these cases, or if we don't like the simple interface, it's possible
+to add new commands as sub-packages just like the main application. They
+are automatically scanned and added to the list.
+
+Here is an example of such sub-C<package>:
+
+   package Galook::Gurgle;
+   use Moo;
+   use Log::Log4perl::Tiny qw< :easy :dead_if_first >;
+   extends 'App::Command';
+
+   sub BUILD_help { 'gurgle your galooks' }
+
+   sub execute {
+      print {*STDOUT} "Gurgle! A Galook is in town!\n";
+   }
+
+   1;
+
+As expected, it appears in the list of sub-commands automatically:
+
+   $ ./galook commands
+           help: help on the command
+       commands: list of supported subcommands
+           date: show the current date and time
+                 (also as: now)
+       show-foo: show the current value for parameter foo
+         gurgle: gurgle your galooks
+
+and works as expected:
+
+   $ ./galook gurgle
+   Gurgle! A Galook is in town!
+
+=cut
