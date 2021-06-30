@@ -18,7 +18,7 @@ In C<lib/MyApp.pm>:
    use strict;
    use Moo;
    extends 'App::Command';
-   
+
    sub BUILD_help { return 'this is a fantastic app' }
    sub BUILD_description { return 'it really is!'    }
    sub BUILD_parameters {
