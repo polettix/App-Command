@@ -26,7 +26,6 @@ has _supports => (
 sub BUILD_fqdn {
    my $self = shift;
    my @path = $self->name;
-   warn "I am @path\n";
    unshift @path, $self->parent->fqdn
       if $self->can('parent') && $self->has_parent;
    return join '.', @path;
